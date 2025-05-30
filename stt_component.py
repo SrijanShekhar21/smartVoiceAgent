@@ -5,7 +5,6 @@ import queue # For thread-safe queues
 
 from deepgram import (
     DeepgramClient,
-    DeepgramClientOptions,
     LiveTranscriptionEvents,
     LiveOptions,
     Microphone,
@@ -50,10 +49,9 @@ class STTListener:
 
     # Deepgram's on_message callback. `dg_connection_instance` is the first arg from SDK.
     async def on_message(self, dg_connection_instance, result, **kwargs):
-        sentence = result.channel.alternatives[0].transcript
-        is_final_segment = result.speech_final # Is this a final segment of an utterance?
-        
-        # --- Interruption Logic (User speaking while bot is active) ---
+        sentence = result.channel.alternatives[0].transcript        
+
+        # -------- Interruption Logic (User speaking while bot is active) --------
         # If user speaks anything, set the user_speaking_event
         if len(sentence.strip()) > 0:
             if not self.user_speaking_event.is_set():
@@ -67,9 +65,9 @@ class STTListener:
                     self.interrupt_bot_event.set() # Signal TTS thread to stop immediately
 
         # --- Transcript Collection Logic ---
-        # Deepgram's `is_final` means this segment is final.
+        # Deepgram's `speech_final` means this segment is final.
         # This typically aligns with SpeechFinal due to endpointing.
-        if is_final_segment: 
+        if result.speech_final: 
             self.transcript_collector.add_part(sentence)
             full_sentence = self.transcript_collector.get_full_transcript()
             
@@ -94,10 +92,6 @@ class STTListener:
             if not self.bot_speaking_event.is_set():
                 # Clear the line and print new interim result
                 print(f"Interim: {self.transcript_collector.get_full_transcript()}", end='\r')
-            else:
-                # If bot is speaking, we don't print interim results to avoid confusion
-                if result.is_final:
-                    self.interrupt_bot_event.set() # Signal TTS to stop if bot is speaking
 
     async def on_error(self, dg_connection_instance, error, **kwargs):
         print(f"\n\n[Deepgram STT] Error: {error}\n\n")
@@ -117,12 +111,13 @@ class STTListener:
             dg_connection.on(LiveTranscriptionEvents.Error, self.on_error)
 
             options = LiveOptions(
-                model="nova-3",
+                model="nova-2",
                 punctuate=True,
-                language="en-US",
+                language="en-IN",
                 encoding=self.DG_ENCODING,
                 channels=self.DG_CHANNELS,
                 sample_rate=self.DG_SAMPLE_RATE,
+                interim_results=True, # Get interim results
                 # Endpointing is crucial for detecting end of user's turn
                 endpointing=self.DG_ENDPOINTING_MS # Time in milliseconds Deepgram waits for silence
             )
@@ -141,8 +136,9 @@ class STTListener:
                 await asyncio.sleep(0.1) 
 
             microphone.finish()
-            dg_connection.finish()
+            await dg_connection.finish()
             print("[STT] Microphone / Deepgram STT finished.")
 
         except Exception as e:
             print(f"[STT] Could not open socket or STT error: {e}")
+
