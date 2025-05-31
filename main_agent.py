@@ -18,7 +18,7 @@ def main_orchestrator():
     # --- Queues for inter-thread communication (thread-safe) ---
     # Maxsize 1 prevents backlogs, ensuring processing of the latest input/response.
     stt_to_llm_queue = queue.Queue(maxsize=1) 
-    llm_to_tts_queue = queue.Queue(maxsize=1)
+    llm_to_tts_queue = queue.Queue(maxsize=15)
 
     # --- Events for synchronization and interruption (thread-safe) ---
     user_speaking_event = threading.Event()  # Set when user is detected speaking

@@ -65,19 +65,27 @@ class TTSPlayer:
                 if text_to_speak:
                     print(f"\n[TTS] Bot speaking: '{text_to_speak}'")                    
                     self.bot_speaking_event.set() # Signal that bot is now speaking
+                    if self.exit_event.is_set():
+                        print("[TTS] Exit event set, stopping playback.")
+                        break
+                    if self.interrupt_bot_event.is_set():
+                        print("\n[TTS] Playback interrupted by user.")
+                        self.interrupt_bot_event.clear()    
+                        break
 
+                    self.synthesize_speech(text_to_speak)
                     # --- Synthesize Speech using chunking---
-                    array_of_chunks = self.break_sentence_into_chunks(text_to_speak, words_per_chunk=10)
-                    # Iterate over each chunk to simulate speaking
-                    for chunk in array_of_chunks:
-                        if self.exit_event.is_set():
-                            break
-                        if self.interrupt_bot_event.is_set():
-                            print("\n[TTS] Playback interrupted by user.")
-                            self.interrupt_bot_event.clear()
-                            break
+                    # array_of_chunks = self.break_sentence_into_chunks(text_to_speak, words_per_chunk=10)
+                    # # Iterate over each chunk to simulate speaking
+                    # for chunk in array_of_chunks:
+                    #     if self.exit_event.is_set():
+                    #         break
+                    #     if self.interrupt_bot_event.is_set():
+                    #         print("\n[TTS] Playback interrupted by user.")
+                    #         self.interrupt_bot_event.clear()
+                    #         break
                         
-                        self.synthesize_speech(chunk)  # Call the synthesis function which uses audio streaming
+                    #     self.synthesize_speech(chunk)  # Call the synthesis function which uses audio streaming
 
                     print("Bot speaking complete, listening for user input...") # Newline after simulated speaking for neatness
                     self.bot_speaking_event.clear() # Signal that bot finished speaking (or was interrupted)

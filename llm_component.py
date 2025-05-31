@@ -3,6 +3,8 @@ import os
 import queue
 import threading
 import google.generativeai as genai # New import for Gemini
+from google import genai
+from google.genai import types
 
 class LLMProcessor:
     def __init__(self, stt_to_llm_queue: queue.Queue,
@@ -13,26 +15,29 @@ class LLMProcessor:
         self.llm_to_tts_queue = llm_to_tts_queue
         self.exit_event = exit_event
 
-        # Configure Gemini Client (should be done once)
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        self.chat = self.client.chats.create(model="gemini-2.0-flash")
 
     async def _get_gemini_response_async(self, prompt: str) -> str:
         """
         Sends the user's prompt to the Gemini LLM and returns its response.
         """
+        # Combine system prompt with user prompt    
+
         print(f"\n[LLM] Sending to Gemini: '{prompt}'")
         try:
-            model = genai.GenerativeModel('gemini-2.0-flash') # You can choose other Gemini models
-            response = await model.generate_content_async(prompt) # Use async method
-            
-            # Accessing text from the response, handling potential empty text or safety settings
-            if response.text:
-                llm_response = response.text
-                print(f"[LLM] Gemini Response: {llm_response}")
-                return llm_response
-            else:
-                print("[LLM] Gemini returned an empty response or blocked content.")
+            response = self.chat.send_message(
+                prompt
+            ) # Use async method for streaming response
+
+            if response is None:
+                print("[LLM] Gemini returned None response.")
                 return "I'm sorry, I couldn't generate a response for that."
+            
+            llm_response = response.text # Get the text from the response
+            print(f"[LLM] Gemini Response: {llm_response}")
+            return llm_response
+
         except Exception as e:
             print(f"[LLM] Error calling Gemini API: {e}")
             return "I'm sorry, I encountered an error when thinking. Please try again."
