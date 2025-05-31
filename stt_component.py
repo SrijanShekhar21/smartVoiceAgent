@@ -45,9 +45,54 @@ class STTListener:
         self.DG_ENCODING = "linear16"
         self.DG_CHANNELS = 1
         self.DG_SAMPLE_RATE = 16000
-        self.DG_ENDPOINTING_MS = 500 # Time in milliseconds Deepgram waits for silence
+        self.DG_ENDPOINTING_MS = 300 # Time in milliseconds Deepgram waits for silence
 
-    # Deepgram's on_message callback. `dg_connection_instance` is the first arg from SDK.
+    # # Deepgram's on_message callback. `dg_connection_instance` is the first arg from SDK.
+    # async def on_message(self, dg_connection_instance, result, **kwargs):
+    #     sentence = result.channel.alternatives[0].transcript        
+
+    #     # -------- Interruption Logic (User speaking while bot is active) --------
+    #     # If user speaks anything, set the user_speaking_event
+    #     if len(sentence.strip()) > 0:
+    #         if not self.user_speaking_event.is_set():
+    #             # This is the first time we detect user speech in this segment
+    #             self.user_speaking_event.set() # Signal that user is speaking
+
+    #         # If the bot is currently speaking AND user starts speaking, signal interruption
+    #         if self.bot_speaking_event.is_set():
+    #             if not self.interrupt_bot_event.is_set(): # Avoid redundant signals
+    #                 print("\n[Interrupt] User detected speaking while bot is talking. Signaling bot to stop.")
+    #                 self.interrupt_bot_event.set() # Signal TTS thread to stop immediately
+
+    #     # --- Transcript Collection Logic ---
+    #     # Deepgram's `speech_final` means this segment is final.
+    #     # This typically aligns with SpeechFinal due to endpointing.
+    #     if result.speech_final: 
+    #         self.transcript_collector.add_part(sentence)
+    #         full_sentence = self.transcript_collector.get_full_transcript()
+            
+    #         # Clear user_speaking_event as this utterance is finalized (implies a pause after this segment)
+    #         if self.user_speaking_event.is_set():
+    #             self.user_speaking_event.clear()
+
+    #         if full_sentence.strip(): # Only process non-empty sentences
+    #             print(f"\nUser: {full_sentence}")
+    #             try:
+    #                 # Put the full sentence in the queue for the LLM
+    #                 # This will block if queue is full, consider put_nowait with error handling
+    #                 self.stt_to_llm_queue.put(full_sentence) 
+    #             except queue.Full:
+    #                 print("[STT] LLM queue is full, skipping sentence.")
+            
+    #         self.transcript_collector.reset() # Reset for the next utterance
+    #     else:
+    #         # Interim results, continue collecting
+    #         self.transcript_collector.add_part(sentence)
+    #         # Only print interim results if bot is not speaking, to avoid clutter/conflicts
+    #         if not self.bot_speaking_event.is_set():
+    #             # Clear the line and print new interim result
+    #             print(f"Interim: {self.transcript_collector.get_full_transcript()}", end='\r')
+
     async def on_message(self, dg_connection_instance, result, **kwargs):
         sentence = result.channel.alternatives[0].transcript        
 
@@ -63,6 +108,10 @@ class STTListener:
                 if not self.interrupt_bot_event.is_set(): # Avoid redundant signals
                     print("\n[Interrupt] User detected speaking while bot is talking. Signaling bot to stop.")
                     self.interrupt_bot_event.set() # Signal TTS thread to stop immediately
+                    # Important: If the bot is interrupted, clear the interim print line.
+                    # This makes the console cleaner when the bot stops talking abruptly.
+                    print(" " * os.get_terminal_size().columns, end='\r')
+
 
         # --- Transcript Collection Logic ---
         # Deepgram's `speech_final` means this segment is final.
@@ -76,11 +125,12 @@ class STTListener:
                 self.user_speaking_event.clear()
 
             if full_sentence.strip(): # Only process non-empty sentences
-                print(f"\nUser: {full_sentence}")
+                print(f"\nUser: {full_sentence}") # Print final user utterance on a new line
                 try:
                     # Put the full sentence in the queue for the LLM
                     # This will block if queue is full, consider put_nowait with error handling
-                    self.stt_to_llm_queue.put(full_sentence) 
+                    # The queue maxsize is 1, so put_nowait is probably better here.
+                    self.stt_to_llm_queue.put_nowait(full_sentence) 
                 except queue.Full:
                     print("[STT] LLM queue is full, skipping sentence.")
             
@@ -92,6 +142,8 @@ class STTListener:
             if not self.bot_speaking_event.is_set():
                 # Clear the line and print new interim result
                 print(f"Interim: {self.transcript_collector.get_full_transcript()}", end='\r')
+            # If the bot is speaking, interim results will be ignored on console,
+            # but they still contribute to the user_speaking_event and interruption logic.
 
     async def on_error(self, dg_connection_instance, error, **kwargs):
         print(f"\n\n[Deepgram STT] Error: {error}\n\n")
