@@ -26,7 +26,7 @@ class LLMProcessor:
 
         print(f"\n[LLM] Sending to Gemini: '{prompt}'")
         try:
-            response = self.chat.send_message(
+            response = self.chat.send_message_stream(
                 prompt
             ) # Use async method for streaming response
 
@@ -34,10 +34,13 @@ class LLMProcessor:
                 print("[LLM] Gemini returned None response.")
                 return "I'm sorry, I couldn't generate a response for that."
             
-            llm_response = response.text # Get the text from the response
-            print(f"[LLM] Gemini Response: {llm_response}")
-            return llm_response
-
+            for chunk in response:
+                if chunk.text:
+                    llm_response = chunk.text # Get the text from the response
+                    print(f"[LLM] Gemini Response: {llm_response}", end="")
+                    print("---- New line ----\n")
+                    return llm_response
+            
         except Exception as e:
             print(f"[LLM] Error calling Gemini API: {e}")
             return "I'm sorry, I encountered an error when thinking. Please try again."
