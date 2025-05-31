@@ -28,7 +28,7 @@ class TTSPlayer:
 
     def simulate_speech(self, text: str):
         words = text.split()
-        print("[TTS-Bot speaking simulation: ] ", end="", flush=True)
+        print("[TTS-Bot speaking simulation:] ", end="", flush=True)
         for word in words:
             print(word, end=" ", flush=True)
             time.sleep(0.1)  # Simulate a short delay for each word
@@ -134,7 +134,7 @@ class TTSPlayer:
                 self.simulate_speech(text)  # Simulate speech output in console for debugging
                 print()  # For clarity in console output
                 # Now use the helper function to play the stream
-                # self._play_audio_stream(r, text) # Pass the response object and original text for logging  <----- Uncomment to play TTS audio
+                self._play_audio_stream(r, text) # Pass the response object and original text for logging  <----- Uncomment to play TTS audio
 
         except requests.exceptions.RequestException as e:
             print(f"[TTS] Request failed for text: '{text[:50]}...': {e}")
@@ -154,7 +154,7 @@ class TTSPlayer:
         Includes interruption logic. This function is designed to be run in a separate thread.
         """
         print("[TTS] Player ready.")
-        while not self.exit_event.is_set():
+        while not self.exit_event.is_set() and not self.interrupt_bot_event.is_set():
             try:
                 # Use get() with a timeout to allow loop to check exit_event periodically
                 item = self.llm_to_tts_queue.get(timeout=0.1) 
